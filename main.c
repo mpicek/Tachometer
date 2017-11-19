@@ -60,6 +60,12 @@ TIMERY
 #define PORTREGISTR PORTD
 #endif
 
+#define RSTpin PD6
+#define CEpin PD7
+#define DCpin PD5
+#define DINpin PD4
+#define CLKpin PD1
+
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
@@ -153,7 +159,7 @@ void InitialiseTachometer(){
     setupTimer(1); //for counting time periods of wheel turn and then velocity counting
     setupTimer(2); //for printint on LCD (cca every second)
     setInterrupt(); //setup INT0 interrupt
-    setPins(PD6, PD7, PD5, PD4, PD1);
+    setPins(RSTpin, CEpin, DCpin, DINpin, CLKpin);
     InitialiseLcd();
     LcdClear();
 }
