@@ -7,6 +7,8 @@
 #include <avr/pgmspace.h>
 #include "Nokia3310.h"
 
+uint64_t numberOfMillis;
+
 void setInterrupt(); //sets INT0 interrupt
 
 void setupTimer(uint8_t number); //sets one of three timers (0 = 8bit, 1 = 16bit, 2 = 8bit)
@@ -17,6 +19,11 @@ void nullTimer(uint8_t number); //nulls timer value (0 = 8bit, 1 = 16bit, 2 = 8b
 
 void intToString(char* cil, uint32_t cislo); //converts int to string (function from string.h is too big)
 
+uint64_t millis();
+
+void resetMillis();
+
+void incrementMillis();
 
 
 void setInterrupt(){
@@ -40,7 +47,11 @@ void setupTimer(uint8_t number){
 		TCCR0 |= 1<<CS02 | 1<<CS00; //prescaling 1024 ... 8bit
 	}
 	else if(number == 1){
-		TCCR1B |= 1<<CS12 | 1<<CS10; //prescaling 1024 ... 16bit
+		OCR1A = 1875; //timer triggers on this value
+    	TCCR1B |= (1 << WGM12); //mode of the interrupt (that it triggers on a value)
+
+		//TCCR1B |= 1<<CS12 | 1<<CS10; //prescaling 1024 ... 16bit
+		TCCR1B |= (1 << CS11) | (1 << CS10); //prescaling 64 ... 16bit
 	}
 	else if(number == 2){
 		TCCR2 |= 1<<CS22 | 1<<CS20; //prescaling 1024 ... 16bit
@@ -70,6 +81,18 @@ void nullTimer(uint8_t number){
 		TCNT2 = 0;
 	}
 
+}
+
+uint64_t millis(){
+	return numberOfMillis;
+}
+
+void resetMillis(){
+	numberOfMillis = 0;
+}
+
+void incrementMillis(int number){
+	numberOfMillis += number;
 }
 
 void intToString(char* cil, uint32_t cislo){
