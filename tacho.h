@@ -7,7 +7,7 @@
 #include <avr/pgmspace.h>
 #include "Nokia3310.h"
 
-uint64_t numberOfMillis;
+volatile uint64_t numberOfMillis;
 
 void setInterrupt(); //sets INT0 interrupt
 

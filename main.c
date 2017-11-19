@@ -20,7 +20,7 @@ if (t3 < (t1+t2)/5){
 Tak ono to precetlo t3 nulu, ale zvedlo se to treba na 4000, no a pak jsem udelal:
 todayTimeInTimerPulses += t3;
 a hele, todayTimeInTimerPulses je zase o pul sekundy vetsi, nez by realne mel byt.
-JE MI ALE STALE ZAHADOU, PROC TO NA TIMERU CETLO NULA, KDYZ PROMENNA magneticSensorTickAllow BY TO NIKDY NEMELA DOVOLIT. MIN HODNOTA, KTEROU TO MOHLO PRECIST BYLA NEJAKYCH 80 (po upraveni 180 a pak treba 500)
+JE MI ALE STALE ZAHADOU, PROC TO NA TIMERU CETLO NULA, KDYZ PROMENNA magneticSensorTickAllowed BY TO NIKDY NEMELA DOVOLIT. MIN HODNOTA, KTEROU TO MOHLO PRECIST BYLA NEJAKYCH 80 (po upraveni 180 a pak treba 500)
 */
 
 /*
@@ -33,7 +33,9 @@ TIMERY
 #define DEBUG
 #define F_CPU 12000000L
 
-#define DEBOUNC_TIME 180
+#define DEBOUNC_TIME 60
+#define BETWEEN_UPDATES_LCD_TIME 400
+#define MAXIMAL_TIME_FROM_LAST_ROTATION_TO_BE_UNDER_MINIMAL_SPEED 1200 //aprox. 6km/h on bike with circumference of 2000mm
 #define ticksPerSecond1024 11719
 #define minSpeed 20000 //means max period for turning the wheel
 
@@ -60,9 +62,12 @@ volatile uint32_t numberOfRotations = 0; //counts turns of the wheel
 volatile uint16_t t1 = 0; //time of 1st turn of wheel
 volatile uint16_t t2 = 0; //turn of 2nd turn of wheel
 volatile uint16_t t3 = 0;
-volatile uint8_t underMinimalSpeed = 0; //indicates, that bike is under minimal speed
+volatile uint8_t underMinimalSpeed = 1; //indicates, that bike is under minimal speed
 volatile uint32_t todayTimeInTimerPulses = 0; //whole time of the day (in timer pulses, so: 1sec = 11718.75 ~= 11719)
-volatile uint8_t magneticSensorTickAllow = 1;
+volatile uint64_t todayTimeInMilliSeconds = 0;
+volatile uint8_t magneticSensorTickAllowed = 1;
+volatile uint64_t lastRotation = 0;
+uint64_t lastLcdUpdate = 0;
 
 #ifdef DEBUG
 volatile int prectenaNula = 0;
@@ -80,22 +85,23 @@ volatile uint8_t chyb = 0;
 #endif
 
 
-uint32_t countSpeed(){
+uint32_t mCountSpeed() //m because the speed is 1000x smaller (we return 1000x bigger number than the real number)
+{
     if(t1 > 0 && t2 > 0 && t3 > 0){
         //vim proc mi to neukazuje ze zacatku rychlost (kdyz se rozjizdim), je to proto, ze tady je podminka,
         //ze vsechny tri casy jsou vetsi nez 0 -> upravit
-        return (3*(uint32_t)wheelCircumference*3600)/((((uint32_t)(t1+t2+t3)*1000)/ticksPerSecond1024));
+        //return (3*(uint32_t)wheelCircumference*3600)/((((uint32_t)(t1+t2+t3)*1000)/ticksPerSecond1024));
+        return (3*(uint32_t)wheelCircumference*3600)/((uint32_t)t1+(uint32_t)t2+(uint32_t)t3);
     }
-
     else{
         return 0;
     }
 }
 
-void printOnLcd(){
-
+void printOnLcd()
+{
     char stringed[11];
-    uint32_t speed = countSpeed();
+    uint32_t speed = mCountSpeed();
 
     LcdClear();
 
@@ -133,10 +139,10 @@ void printOnLcd(){
     LcdString("Chyb: ");
     LcdString(stringed);
     #endif
-
 }
 
-void InitialiseTachometer(){
+void InitialiseTachometer()
+{
     resetMillis();
     setupTimer(0); //for debouncing
     setupTimer(1); //for counting time periods of wheel turn and then velocity counting
@@ -149,85 +155,56 @@ void InitialiseTachometer(){
 
 
 
-int main(void){
+int main(void)
+{
     InitialiseTachometer();
 
-
-
 	while(1){
-        
 
-        if (readTimer(1) > minSpeed){ //we are under minimal speed
+        if(millis() > lastRotation + MAXIMAL_TIME_FROM_LAST_ROTATION_TO_BE_UNDER_MINIMAL_SPEED){ //min speed
             underMinimalSpeed = 1;
-            nullTimer(1);
             t1 = 0;
             t2 = 0;
             t3 = 0;
         }
 
-
-        if (tim2_ov >= 90){ // 8-bit timeru - je to hodne rychly
-            //TODO spocitat rychlost
+        if(lastLcdUpdate + BETWEEN_UPDATES_LCD_TIME < millis()){ //print on lcd
             printOnLcd();
-            tim2_ov = 0;
         }
 
-        if (readTimer(2) > 240){ // 8-bit timeru - je to hodne rychly
-            tim2_ov++;
-            nullTimer(2);
-        }
-
-
-
-        if (readTimer(0) > DEBOUNC_TIME && magneticSensorTickAllow == 0 && needsToBeOne < 2){ //opet dve promenne, protoze 8-bit timer ma moc malou hodnotu na uchovani
-            needsToBeOne++;
-            nullTimer(0);
-        }
-
-        if (readTimer(0) > DEBOUNC_TIME && magneticSensorTickAllow == 0 && needsToBeOne == 2){
-            magneticSensorTickAllow = 1;
+        if(lastRotation + DEBOUNC_TIME < millis()){ //sensor debouncing
+            magneticSensorTickAllowed = 1;
         }
     }
 }
 
-ISR(INT0_vect){
+ISR(INT0_vect)
+{
+    if(magneticSensorTickAllowed == 1){
 
-    
-    if(magneticSensorTickAllow == 1){
-
-        
-        nullTimer(0);
-        magneticSensorTickAllow = 0;
-        needsToBeOne = 0;
+        magneticSensorTickAllowed = 0;
 
         if (underMinimalSpeed == 1){
             underMinimalSpeed = 0;
-            nullTimer(1);
         }
         else{
             numberOfRotations++;
             t1 = t2;
             t2 = t3;
-            t3 = readTimer(1);
+            t3 = millis() - lastRotation;
+            lastRotation = millis();
 
-            nullTimer(1);
-            todayTimeInTimerPulses += t3;
-            #ifdef DEBUG
-            if(t3 == 0 || t3 < 3){
-                chyb++;
-            }
-            #endif
+            numberOfRotations++;
+
+            todayTimeInMilliSeconds += t3;
         }
     }
-    
-    //todayTimeInTimerPulses += readTimer(1);
-    //nullTimer(1);
 }
 
 
-ISR(INT1_vect){
+ISR(INT1_vect)
+{
     PORTB ^= 1<<PB1;
-    //todayTimeInTimerPulses = 0;
 }
 
 ISR (TIMER1_COMPA_vect)
