@@ -33,7 +33,7 @@ TIMERY
 #define DEBUG
 #define F_CPU 12000000L
 
-#define DEBOUNC_TIME 60
+#define DEBOUNC_TIME 50
 #define BETWEEN_UPDATES_LCD_TIME 400
 #define MAXIMAL_TIME_FROM_LAST_ROTATION_TO_BE_UNDER_MINIMAL_SPEED 1200 //aprox. 6km/h on bike with circumference of 2000mm
 #define ticksPerSecond1024 11719
@@ -48,6 +48,7 @@ TIMERY
 #define DCpin PD5
 #define DINpin PD4
 #define CLKpin PD1
+#define BADISR_vect
 
 #include <avr/io.h>
 #include <util/delay.h>
@@ -84,44 +85,54 @@ uint8_t needsToBeOne = 0;
 volatile uint8_t chyb = 0;
 #endif
 
+uint16_t a = 0;
 
-uint32_t mCountSpeed() //m because the speed is 1000x smaller (we return 1000x bigger number than the real number)
+/*uint32_t mCountSpeed() //m because the speed is 1000x smaller (we return 1000x bigger number than the real number)
 {
     if(t1 > 0 && t2 > 0 && t3 > 0){
         //vim proc mi to neukazuje ze zacatku rychlost (kdyz se rozjizdim), je to proto, ze tady je podminka,
         //ze vsechny tri casy jsou vetsi nez 0 -> upravit
         //return (3*(uint32_t)wheelCircumference*3600)/((((uint32_t)(t1+t2+t3)*1000)/ticksPerSecond1024));
+        return t1+t2+t3;
         return (3*(uint32_t)wheelCircumference*3600)/((uint32_t)t1+(uint32_t)t2+(uint32_t)t3);
     }
     else{
         return 0;
     }
-}
+}*/
 
 void printOnLcd()
 {
     char stringed[11];
-    uint32_t speed = mCountSpeed();
+    //uint32_t speed = mCountSpeed();
 
     LcdClear();
 
-    GotoXY(0,0);
-    intToString(stringed, speed/1000); //v per day
+    /*GotoXY(0,0);
+    intToString(stringed, speed); //v per day
     LcdString(stringed);
-    LcdString(" Km/h");
+    LcdString(" Km/h");*/
+    
 
     GotoXY(0,1);
-    intToString(stringed, (numberOfRotations*wheelCircumference)/1000); //s per day
+    /*intToString(stringed, (numberOfRotations*wheelCircumference)/1000); //s per day
     LcdString(stringed);
-    LcdString(" m");
+    LcdString(" m");*/
+    intToString(stringed, t1);
+    LcdString(stringed);
 
 
     GotoXY(0,2);
-    intToString(stringed, todayTimeInTimerPulses/ticksPerSecond1024); //t per day
+    /*intToString(stringed, todayTimeInTimerPulses/ticksPerSecond1024); //t per day
     LcdString(stringed);
-    LcdString(" s");
+    LcdString(" s");*/
+    intToString(stringed, t2);
+    LcdString(stringed);
 
-    /*GotoXY(0,3);
+    GotoXY(0,3);
+    intToString(stringed, t3);
+    LcdString(stringed);
+    /*LcdString(stringed);
     LcdString("AVG: ");
     if(todayTimeInTimerPulses == 0){
         intToString(cas, 0);
@@ -148,6 +159,7 @@ void InitialiseTachometer()
     setupTimer(1); //for counting time periods of wheel turn and then velocity counting
     setupTimer(2); //for printint on LCD (cca every second)
     setInterrupt(); //setup INT0 interrupt
+    sei();
     setPins(RSTpin, CEpin, DCpin, DINpin, CLKpin);
     InitialiseLcd();
     LcdClear();
@@ -157,9 +169,25 @@ void InitialiseTachometer()
 
 int main(void)
 {
+    DDRB |= 1 << PB1;
+    DDRB |= 1 << PB2;
     InitialiseTachometer();
+    PORTB |= 1 << PB1;
+    PORTB ^= 1<<PB1;
+
+    //printOnLcd();
+    
+    //PORTB |= 1 << PB1;
+    
+
+    //uint64_t lastMillis = millis();
+    PORTB |= 1 << PB2;
+        a = millis();
+        while(millis() < a+1000);
+        PORTB ^= 1<<PB2;
 
 	while(1){
+        //if(lastMillis = millis()) PORTB ^= 1<<PB1;
 
         if(millis() > lastRotation + MAXIMAL_TIME_FROM_LAST_ROTATION_TO_BE_UNDER_MINIMAL_SPEED){ //min speed
             underMinimalSpeed = 1;
@@ -168,25 +196,46 @@ int main(void)
             t3 = 0;
         }
 
+
         if(lastLcdUpdate + BETWEEN_UPDATES_LCD_TIME < millis()){ //print on lcd
+            lastLcdUpdate = millis();
+            
             printOnLcd();
         }
 
-        if(lastRotation + DEBOUNC_TIME < millis()){ //sensor debouncing
+        /*if(lastRotation + DEBOUNC_TIME < millis()){ //sensor debouncing
             magneticSensorTickAllowed = 1;
+        }*/
+        /*if(lastRotation + 1000 < millis()){
+            lastRotation = millis();
+            PORTB ^= 1<<PB1;
+        }*/
+/*
+        if(readTimer(1) > 1880){
+            nullTimer(1);
         }
+        */
+        if(readTimer(0) > 50){
+            if(readTimer(1) > 1880){
+                nullTimer(1);
+            }
+        }
+
     }
+    return 0;
 }
 
 ISR(INT0_vect)
 {
-    if(magneticSensorTickAllowed == 1){
-
-        magneticSensorTickAllowed = 0;
+    cli();
+    if(millis() - lastRotation > DEBOUNC_TIME){
+        //PORTB ^= 1<<PB1;
 
         if (underMinimalSpeed == 1){
             underMinimalSpeed = 0;
+            lastRotation = millis();
         }
+
         else{
             numberOfRotations++;
             t1 = t2;
@@ -198,17 +247,31 @@ ISR(INT0_vect)
 
             todayTimeInMilliSeconds += t3;
         }
+
     }
+    sei();
 }
 
-
+/*
 ISR(INT1_vect)
 {
-    PORTB ^= 1<<PB1;
-}
+
+}*/
 
 ISR (TIMER1_COMPA_vect)
 {
-    incrementMillis(10);   
+    cli();
+    incrementMillis(1); //10 
+    nullTimer(1);
+    sei();
+    /*a++; 
+    if(a > 30){
+        a = 0;
+        PORTB ^= 1<<PB1;
+    }*/
 }
 
+ISR(BADISR_vect)
+{
+    PORTB ^= 1<<PB1;
+}

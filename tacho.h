@@ -36,8 +36,8 @@ void setInterrupt(){
 	DDRD &= ~(1<<PD3); //set pin as input for interrupt (INT1)
 	PORTD |= 1<<PD3; //activate pull-up resistor
 	
-	GICR |= (1<<INT1); //enable int0 external interrupt
-	MCUCR |= (1<<ISC11); //falling edge
+	//GICR |= (1<<INT1); //enable int0 external interrupt
+	//MCUCR |= (1<<ISC11); //falling edge
 
 	sei();
 }
@@ -47,8 +47,10 @@ void setupTimer(uint8_t number){
 		TCCR0 |= 1<<CS02 | 1<<CS00; //prescaling 1024 ... 8bit
 	}
 	else if(number == 1){
-		OCR1A = 1875; //timer triggers on this value
+		OCR1A = 188; //timer triggers on this value ... 1875
     	TCCR1B |= (1 << WGM12); //mode of the interrupt (that it triggers on a value)
+    	TIMSK |= (1 << OCIE1A);
+    	//Set interrupt on compare match
 
 		//TCCR1B |= 1<<CS12 | 1<<CS10; //prescaling 1024 ... 16bit
 		TCCR1B |= (1 << CS11) | (1 << CS10); //prescaling 64 ... 16bit
@@ -84,7 +86,10 @@ void nullTimer(uint8_t number){
 }
 
 uint64_t millis(){
-	return numberOfMillis;
+	cli();
+	uint64_t n = numberOfMillis;
+	sei();
+	return n;
 }
 
 void resetMillis(){
