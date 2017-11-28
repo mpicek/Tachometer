@@ -18,9 +18,9 @@ if (t3 < (t1+t2)/5){
     t3 = (t1+t2)/2;
 }
 Tak ono to precetlo t3 nulu, ale zvedlo se to treba na 4000, no a pak jsem udelal:
-timeDay += t3;
-a hele, timeDay je zase o pul sekundy vetsi, nez by realne mel byt.
-JE MI ALE STALE ZAHADOU, PROC TO NA TIMERU CETLO NULA, KDYZ PROMENNA clickAllowed BY TO NIKDY NEMELA DOVOLIT. MIN HODNOTA, KTEROU TO MOHLO PRECIST BYLA NEJAKYCH 80 (po upraveni 180 a pak treba 500)
+todayTimeInTimerPulses += t3;
+a hele, todayTimeInTimerPulses je zase o pul sekundy vetsi, nez by realne mel byt.
+JE MI ALE STALE ZAHADOU, PROC TO NA TIMERU CETLO NULA, KDYZ PROMENNA magneticSensorTickAllow BY TO NIKDY NEMELA DOVOLIT. MIN HODNOTA, KTEROU TO MOHLO PRECIST BYLA NEJAKYCH 80 (po upraveni 180 a pak treba 500)
 */
 
 /*
@@ -33,32 +33,13 @@ TIMERY
 #define DEBUG
 #define F_CPU 12000000L
 
-#ifndef F_CPU
-#define F_CPU 12000000L
-#endif
-
 #define DEBOUNC_TIME 180
 #define ticksPerSecond1024 11719
 #define minSpeed 20000 //means max period for turning the wheel
 
-
 #define PORTY_D
-
-#ifndef PORTY_D //neumim udelat slozenou podminku - proste ze kdyz ani jedno neni definovany, tak musim neco definovat a ja definuju PORTY_D
-#ifndef PORTY_B
-#define PORTY_D
-#endif
-#endif
-
-#ifdef PORTY_B
-#define DDRREGISTR DDRB
-#define PORTREGISTR PORTB
-#endif
-
-#ifdef PORTY_D
 #define DDRREGISTR DDRD
 #define PORTREGISTR PORTD
-#endif
 
 #define RSTpin PD6
 #define CEpin PD7
@@ -70,26 +51,27 @@ TIMERY
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
+#include <stdlib.h>
 #include "Nokia3310.h"
 #include "tacho.h"
 
 
-volatile uint32_t otacek = 0; //counts turns of the wheel
+volatile uint32_t numberOfRotations = 0; //counts turns of the wheel
 volatile uint16_t t1 = 0; //time of 1st turn of wheel
 volatile uint16_t t2 = 0; //turn of 2nd turn of wheel
 volatile uint16_t t3 = 0;
-volatile uint8_t dlouho = 0; //indicates, that bike is under minimal speed
-volatile uint32_t timeDay = 0; //whole time of the day (in timer pulses, so: 1sec = 11718.75 ~= 11719)
-volatile uint8_t clickAllowed = 1;
+volatile uint8_t underMinimalSpeed = 0; //indicates, that bike is under minimal speed
+volatile uint32_t todayTimeInTimerPulses = 0; //whole time of the day (in timer pulses, so: 1sec = 11718.75 ~= 11719)
+volatile uint8_t magneticSensorTickAllow = 1;
 
 #ifdef DEBUG
-volatile prectenaNula = 0;
+volatile int prectenaNula = 0;
 #endif
 
 uint8_t tim2_ov = 0;
 
 
-uint16_t Owheel = 2068; //in mm ... 2136 ... obvod kola
+uint16_t wheelCircumference = 2068; //in mm ... 2136 ... obvod kola
 
 uint8_t needsToBeOne = 0;
 
@@ -102,7 +84,7 @@ uint32_t countSpeed(){
     if(t1 > 0 && t2 > 0 && t3 > 0){
         //vim proc mi to neukazuje ze zacatku rychlost (kdyz se rozjizdim), je to proto, ze tady je podminka,
         //ze vsechny tri casy jsou vetsi nez 0 -> upravit
-        return (3*(uint32_t)Owheel*3600)/((((uint32_t)(t1+t2+t3)*1000)/ticksPerSecond1024));
+        return (3*(uint32_t)wheelCircumference*3600)/((((uint32_t)(t1+t2+t3)*1000)/ticksPerSecond1024));
     }
 
     else{
@@ -123,23 +105,23 @@ void printOnLcd(){
     LcdString(" Km/h");
 
     GotoXY(0,1);
-    intToString(stringed, (otacek*OWheel)/1000); //s per day
+    intToString(stringed, (numberOfRotations*wheelCircumference)/1000); //s per day
     LcdString(stringed);
     LcdString(" m");
 
 
     GotoXY(0,2);
-    intToString(stringed, timeDay/ticksPerSecond1024); //t per day
+    intToString(stringed, todayTimeInTimerPulses/ticksPerSecond1024); //t per day
     LcdString(stringed);
     LcdString(" s");
 
     /*GotoXY(0,3);
     LcdString("AVG: ");
-    if(timeDay == 0){
+    if(todayTimeInTimerPulses == 0){
         intToString(cas, 0);
     }
     else{
-        intToString(cas, ((otacek*2136)/1000)/(timeDay/ticksPerSecond1024)*3.6);
+        intToString(cas, ((numberOfRotations*2136)/1000)/(todayTimeInTimerPulses/ticksPerSecond1024)*3.6);
     }
     LcdString(cas);
     LcdString(" km/h");*/
@@ -155,6 +137,7 @@ void printOnLcd(){
 }
 
 void InitialiseTachometer(){
+
     setupTimer(0); //for debouncing
     setupTimer(1); //for counting time periods of wheel turn and then velocity counting
     setupTimer(2); //for printint on LCD (cca every second)
@@ -171,11 +154,11 @@ int main(void){
 
 
 
-	while(1){
+    while(1){
         
 
         if (readTimer(1) > minSpeed){ //we are under minimal speed
-            dlouho = 1;
+            underMinimalSpeed = 1;
             nullTimer(1);
             t1 = 0;
             t2 = 0;
@@ -196,13 +179,13 @@ int main(void){
 
 
 
-        if (readTimer(0) > DEBOUNC_TIME && clickAllowed == 0 && needsToBeOne < 2){ //opet dve promenne, protoze 8-bit timer ma moc malou hodnotu na uchovani
+        if (readTimer(0) > DEBOUNC_TIME && magneticSensorTickAllow == 0 && needsToBeOne < 2){ //opet dve promenne, protoze 8-bit timer ma moc malou hodnotu na uchovani
             needsToBeOne++;
             nullTimer(0);
         }
 
-        if (readTimer(0) > DEBOUNC_TIME && clickAllowed == 0 && needsToBeOne == 2){
-            clickAllowed = 1;
+        if (readTimer(0) > DEBOUNC_TIME && magneticSensorTickAllow == 0 && needsToBeOne == 2){
+            magneticSensorTickAllow = 1;
         }
     }
 }
@@ -210,25 +193,25 @@ int main(void){
 ISR(INT0_vect){
 
     
-    if(clickAllowed == 1){
+    if(magneticSensorTickAllow == 1){
 
         
         nullTimer(0);
-        clickAllowed = 0;
+        magneticSensorTickAllow = 0;
         needsToBeOne = 0;
 
-        if (dlouho == 1){
-            dlouho = 0;
+        if (underMinimalSpeed == 1){
+            underMinimalSpeed = 0;
             nullTimer(1);
         }
         else{
-            otacek++;
+            numberOfRotations++;
             t1 = t2;
             t2 = t3;
             t3 = readTimer(1);
 
             nullTimer(1);
-            timeDay += t3;
+            todayTimeInTimerPulses += t3;
             #ifdef DEBUG
             if(t3 == 0 || t3 < 3){
                 chyb++;
@@ -237,14 +220,12 @@ ISR(INT0_vect){
         }
     }
     
-    //timeDay += readTimer(1);
+    //todayTimeInTimerPulses += readTimer(1);
     //nullTimer(1);
 }
 
 
 ISR(INT1_vect){
     PORTB ^= 1<<PB1;
-    //timeDay = 0;
+    //todayTimeInTimerPulses = 0;
 }
-
-

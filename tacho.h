@@ -18,7 +18,6 @@ void nullTimer(uint8_t number); //nulls timer value (0 = 8bit, 1 = 16bit, 2 = 8b
 void intToString(char* cil, uint32_t cislo); //converts int to string (function from string.h is too big)
 
 
-
 void setInterrupt(){
 	DDRD &= ~(1<<PD2); //set pin as input for interrupt (INT0)
 	PORTD |= 1<<PD2; //activate pull-up resistor

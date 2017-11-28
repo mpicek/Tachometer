@@ -137,42 +137,42 @@ void setPins(uint8_t RST, uint8_t CE, uint8_t DC, uint8_t DIN, uint8_t CLK){
     clk = CLK;
 
     DDRREGISTR |= 1<<ce; //set pin as output
-	  DDRREGISTR |= 1<<rst;
-	  DDRREGISTR |= 1<<dc;
-	  DDRREGISTR |= 1<<din;
-	  DDRREGISTR |= 1<<clk;
+    DDRREGISTR |= 1<<rst;
+    DDRREGISTR |= 1<<dc;
+    DDRREGISTR |= 1<<din;
+    DDRREGISTR |= 1<<clk;
 }
 
 void low(uint8_t pin){
-	PORTREGISTR &= ~(1<<pin);
+  PORTREGISTR &= ~(1<<pin);
 }
 
 void high(uint8_t pin){
-	PORTREGISTR |=1 << pin;
+  PORTREGISTR |=1 << pin;
 }
 
 void shiftOut(uint8_t val){
-	uint8_t i;
+  uint8_t i;
 
-	for (i = 0; i < 8; i++)  {
+  for (i = 0; i < 8; i++)  {
 
-		if((!!(val & (1 << (7 - i)))) == 1){
-			high(din);
-		}
-		else if((!!(val & (1 << (7 - i)))) == 0){
-			low(din);
-		}
+    if((!!(val & (1 << (7 - i)))) == 1){
+      high(din);
+    }
+    else if((!!(val & (1 << (7 - i)))) == 0){
+      low(din);
+    }
 
-		high(clk);
-		low(clk);
-	}
+    high(clk);
+    low(clk);
+  }
 }
 
 void Write(uint8_t data){
-	high(dc);
-	low(ce);
-	shiftOut(data);
-	high(ce);
+  high(dc);
+  low(ce);
+  shiftOut(data);
+  high(ce);
 }
 
 
@@ -196,7 +196,7 @@ void LcdString(char *characters){
 
 void InitialiseLcd(){  //DONE
     low(rst);
-	high(rst);
+  high(rst);
 
     Command(0x21); // set LCD Vop (contrast)
     Command(0xB1); // set temp coefficent
@@ -209,8 +209,8 @@ void InitialiseLcd(){  //DONE
 void Command(uint8_t data){  //DONE
     low(dc);
     low(ce);
-	shiftOut(data);
-	high(ce);
+  shiftOut(data);
+  high(ce);
 }
 
 
