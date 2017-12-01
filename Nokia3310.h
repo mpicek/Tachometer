@@ -135,20 +135,19 @@ void setPins(uint8_t RST, uint8_t CE, uint8_t DC, uint8_t DIN, uint8_t CLK){
     dc = DC;
     din = DIN;
     clk = CLK;
-
-    DDRREGISTR |= 1<<ce; //set pin as output
-    DDRREGISTR |= 1<<rst;
-    DDRREGISTR |= 1<<dc;
-    DDRREGISTR |= 1<<din;
-    DDRREGISTR |= 1<<clk;
+    pinMode(rst, OUTPUT);
+    pinMode(ce, OUTPUT);
+    pinMode(dc, OUTPUT);
+    pinMode(din, OUTPUT);
+    pinMode(clk, OUTPUT);
 }
 
 void low(uint8_t pin){
-  PORTREGISTR &= ~(1<<pin);
+  digitalWrite(pin, LOW);
 }
 
 void high(uint8_t pin){
-  PORTREGISTR |=1 << pin;
+  digitalWrite(pin, HIGH);
 }
 
 void shiftOut(uint8_t val){
@@ -196,7 +195,7 @@ void LcdString(char *characters){
 
 void InitialiseLcd(){  //DONE
     low(rst);
-  high(rst);
+    high(rst);
 
     Command(0x21); // set LCD Vop (contrast)
     Command(0xB1); // set temp coefficent
@@ -209,8 +208,8 @@ void InitialiseLcd(){  //DONE
 void Command(uint8_t data){  //DONE
     low(dc);
     low(ce);
-  shiftOut(data);
-  high(ce);
+    shiftOut(data);
+    high(ce);
 }
 
 
