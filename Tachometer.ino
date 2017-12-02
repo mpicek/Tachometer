@@ -32,9 +32,9 @@ TIMERY
 
 #define DEBUG
 
-#define DEBOUNC_TIME 180
-#define ticksPerSecond1024 11719
-#define minSpeed 20000 //means max period for turning the wheel
+#define DEBOUNCE_TIME 60
+#define minSpeed 1200 //means max period for turning the wheel in ms
+#define printLCDInterval 1000
 
 #define RSTpin 7
 #define CEpin 8
@@ -47,6 +47,8 @@ TIMERY
 #define butt1 11
 #define butt2 12
 
+
+
 #include <EEPROM.h>
 #include "Nokia3310.h"
 #include "tacho.h"
@@ -56,38 +58,20 @@ volatile uint16_t t1 = 0; //time of 1st turn of wheel
 volatile uint16_t t2 = 0; //turn of 2nd turn of wheel
 volatile uint16_t t3 = 0;
 volatile uint8_t underMinimalSpeed = 0; //indicates, that bike is under minimal speed
-volatile uint32_t todayTimeInTimerPulses = 0; //whole time of the day (in timer pulses, so: 1sec = 11718.75 ~= 11719)
-volatile uint8_t magneticSensorTickAllow = 1;
+volatile uint32_t todayTime = 0; //whole time of the day (in timer pulses, so: 1sec = 11718.75 ~= 11719)
 
-#ifdef DEBUG
-volatile int prectenaNula = 0;
-#endif
+uint16_t wheelCircumference = 2000; //in mm ... 2136 ... obvod kola
 
-uint8_t tim2_ov = 0;
-
-
-uint16_t wheelCircumference = 2068; //in mm ... 2136 ... obvod kola
-
-uint8_t needsToBeOne = 0;
-
-#ifdef DEBUG
-volatile uint8_t chyb = 0;
-#endif
-
-
-uint32_t countSpeed(){
+uint32_t countSpeed(){ // returns 1000x bigger speed (but in km/h) .. but only if t1, t2 and t3 > 0
     if(t1 > 0 && t2 > 0 && t3 > 0){
-        //vim proc mi to neukazuje ze zacatku rychlost (kdyz se rozjizdim), je to proto, ze tady je podminka,
-        //ze vsechny tri casy jsou vetsi nez 0 -> upravit
-        return (3*(uint32_t)wheelCircumference*3600)/((((uint32_t)(t1+t2+t3)*1000)/ticksPerSecond1024));
+        return (3*(uint32_t)wheelCircumference*3600)/((uint32_t)(t1+t2+t3));
     }
-
     else{
         return 0;
     }
 }
 
-void printOnLcd(){
+void printOnLCD(){
 
     char stringed[11];
     uint32_t speed = countSpeed();
@@ -96,60 +80,43 @@ void printOnLcd(){
 
     GotoXY(0,0);
     intToString(stringed, speed/1000); //v per day
-    LcdString(stringed);
+    LcdStringBig(stringed);
+    GotoXY(35,2);
     LcdString(" Km/h");
 
-    GotoXY(0,1);
+    GotoXY(0,4);
     intToString(stringed, (numberOfRotations*wheelCircumference)/1000); //s per day
     LcdString(stringed);
     LcdString(" m");
 
-
-    GotoXY(0,2);
-    intToString(stringed, todayTimeInTimerPulses/ticksPerSecond1024); //t per day
+    GotoXY(41, 4);
+    intToString(stringed, (numberOfRotations*wheelCircumference*3600)/(todayTime*1000)); //s per day
     LcdString(stringed);
-    LcdString(" s");
+    LcdString(" m");
 
-    #ifdef DEBUG
 
     GotoXY(0,5);
-    intToString(stringed, chyb);
-    LcdString("Chyb: ");
+    intToString(stringed, todayTime/1000); //t per day
     LcdString(stringed);
-    #endif
+    LcdString(" s");
 }
 
 volatile bool b = 0;
-volatile uint64_t last = 0;
+volatile uint64_t lastSpin;
+uint64_t lastPrintLCD;
+volatile uint64_t lastButtonPress;
 
-void InitialiseTachometer(){
-    setPins(RSTpin, CEpin, DCpin, DINpin, CLKpin);
-    InitialiseLcd();
-    LcdClear();
-    setSensors();
-}
-
-void setSensors(){
-    pinMode(magSensorPin, INPUT);
-    digitalWrite(magSensorPin, HIGH); 
-    attachInterrupt(digitalPinToInterrupt(magSensorPin), magSensorISR, FALLING);
-
-    pinMode(buttonsPin, INPUT);
-    digitalWrite(buttonsPin, HIGH); 
-    attachInterrupt(digitalPinToInterrupt(buttonsPin), buttonsISR, FALLING);
-    
-    pinMode(butt1, OUTPUT);
-    digitalWrite(butt1, LOW);
-    pinMode(butt2, OUTPUT);
-    digitalWrite(butt2, LOW);
-}
+volatile int chyb;
 
 void setup(){
+    lastSpin = millis();
+    lastButtonPress = millis();
+    lastPrintLCD = millis();
+    
     InitialiseTachometer();
         
     pinMode(13, OUTPUT);
     digitalWrite(13, LOW);
-    last = millis();
 
     pinMode(9, OUTPUT);
     digitalWrite(9, LOW);
@@ -158,65 +125,73 @@ void setup(){
 }
 
 void loop(void){
-    GotoXY(0,0);
+    /*GotoXY(0,0);
     LcdString(" Km/h");
     int val = EEPROM.read(0);
     if(val == 3){
         digitalWrite(9, HIGH);
     }
-    EEPROM.write(0, 3);
-    while(1){}
-    /*
+    EEPROM.write(0, 3);*/
+    /*GotoXY(0,0);
+    char stringed[11];
+    intToString(stringed, 7890); //v per day
+    LcdStringBig(stringed);
+    while(1){}*/
+    
     while(1){
-        if (readTimer(1) > minSpeed){ //we are under minimal speed
+        if(millis() - lastSpin > minSpeed){
+            digitalWrite(9, HIGH);
+            digitalWrite(10, HIGH);
             underMinimalSpeed = 1;
-            nullTimer(1);
             t1 = 0;
             t2 = 0;
             t3 = 0;
+        }else{
+            digitalWrite(9, LOW);
+            digitalWrite(10, LOW);
+        }
+        
+        if(millis() - lastPrintLCD > printLCDInterval){
+            printOnLCD();
+            lastPrintLCD = millis();
         }
 
-
-        if (tim2_ov >= 90){ // 8-bit timeru - je to hodne rychly
-            //TODO spocitat rychlost
-            printOnLcd();
-            tim2_ov = 0;
-        }
-
-        if (readTimer(2) > 240){ // 8-bit timeru - je to hodne rychly
-            tim2_ov++;
-            nullTimer(2);
-        }
-
-
-
-        if (readTimer(0) > DEBOUNC_TIME && magneticSensorTickAllow == 0 && needsToBeOne < 2){ //opet dve promenne, protoze 8-bit timer ma moc malou hodnotu na uchovani
-            needsToBeOne++;
-            nullTimer(0);
-        }
-
-        if (readTimer(0) > DEBOUNC_TIME && magneticSensorTickAllow == 0 && needsToBeOne == 2){
-            magneticSensorTickAllow = 1;
-        }
-    }*/
+        
+    }
 }
 void magSensorISR(){
-    if(millis() - last > 50){
-    last = millis();
-    if(b){
-      digitalWrite(13, LOW);
-      b = 0;
-    }
-    else{
-      digitalWrite(13, HIGH);
-      b = 1;
-    }
+    if(millis() - lastSpin > DEBOUNCE_TIME){
+        if(b){
+            digitalWrite(13, LOW);
+            b = 0;
+        }
+        else{
+            digitalWrite(13, HIGH);
+            b = 1;
+        }
+        
+        if (underMinimalSpeed == 1){
+            underMinimalSpeed = 0;
+        }
+        else{
+            numberOfRotations++;
+            t1 = t2;
+            t2 = t3;
+            t3 = millis() - lastSpin;
+
+            todayTime += t3;
+            #ifdef DEBUG
+            if(t3 == 0 || t3 < 3){
+                chyb++;
+            }
+            #endif
+        }
+        lastSpin = millis();
     }
 }
-
 void buttonsISR(){
-    if(millis() - last > 50){
-      last = millis();
+    if(millis() - lastButtonPress > 50){
+      lastButtonPress = millis();
         digitalWrite(butt1, HIGH);
         if(digitalRead(buttonsPin) == HIGH){
             digitalWrite(9, HIGH);
@@ -231,11 +206,7 @@ void buttonsISR(){
 }
 /*
 ISR(INT0_vect){
-
-    
     if(magneticSensorTickAllow == 1){
-
-        
         nullTimer(0);
         magneticSensorTickAllow = 0;
         needsToBeOne = 0;
@@ -259,12 +230,9 @@ ISR(INT0_vect){
             #endif
         }
     }
-    
     //todayTimeInTimerPulses += readTimer(1);
     //nullTimer(1);
 }
-
-
 ISR(INT1_vect){
     PORTB ^= 1<<PB1;
     //todayTimeInTimerPulses = 0;
