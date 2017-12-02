@@ -42,8 +42,10 @@ TIMERY
 #define DINpin 5
 #define CLKpin 4
 
-#define magSensor 3
+#define magSensorPin 3
 #define buttonsPin 2
+#define butt1 11
+#define butt2 12
 
 #include <EEPROM.h>
 #include "Nokia3310.h"
@@ -115,36 +117,39 @@ void printOnLcd(){
     LcdString("Chyb: ");
     LcdString(stringed);
     #endif
-
 }
+
+volatile bool b = 0;
+volatile uint64_t last = 0;
 
 void InitialiseTachometer(){
     setPins(RSTpin, CEpin, DCpin, DINpin, CLKpin);
     InitialiseLcd();
     LcdClear();
+    setSensors();
 }
 
-volatile bool b = 0;
-volatile uint64_t last = 0;
-int butt1 = 11;
-int butt2 = 12;
-
-void setup(){
-    InitialiseTachometer();
-    pinMode(magSensor, INPUT);
-    digitalWrite(magSensor, HIGH); 
-    attachInterrupt(digitalPinToInterrupt(magSensor), magSensorISR, FALLING);
-    pinMode(13, OUTPUT);
-    digitalWrite(13, LOW);
-    last = millis();
+void setSensors(){
+    pinMode(magSensorPin, INPUT);
+    digitalWrite(magSensorPin, HIGH); 
+    attachInterrupt(digitalPinToInterrupt(magSensorPin), magSensorISR, FALLING);
 
     pinMode(buttonsPin, INPUT);
     digitalWrite(buttonsPin, HIGH); 
     attachInterrupt(digitalPinToInterrupt(buttonsPin), buttonsISR, FALLING);
+    
     pinMode(butt1, OUTPUT);
     digitalWrite(butt1, LOW);
     pinMode(butt2, OUTPUT);
     digitalWrite(butt2, LOW);
+}
+
+void setup(){
+    InitialiseTachometer();
+        
+    pinMode(13, OUTPUT);
+    digitalWrite(13, LOW);
+    last = millis();
 
     pinMode(9, OUTPUT);
     digitalWrite(9, LOW);
