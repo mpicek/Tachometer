@@ -71,6 +71,15 @@ uint32_t countSpeed(){ // returns 1000x bigger speed (but in km/h) .. but only i
     }
 }
 
+void initializeValues(){
+    numberOfRotations = 0; //counts turns of the wheel
+    t1 = 0; //time of 1st turn of wheel
+    t2 = 0; //turn of 2nd turn of wheel
+    t3 = 0;
+    underMinimalSpeed = 0; //indicates, that bike is under minimal speed
+    todayTime = 0; //whole time of the day (in timer pulses, so: 1sec = 11718.75 ~= 11719)
+}
+
 void printOnLCD(){
 
     char stringed[11];
@@ -90,9 +99,10 @@ void printOnLCD(){
     LcdString(" m");
 
     GotoXY(41, 4);
-    intToString(stringed, (numberOfRotations*wheelCircumference*3600)/(todayTime*1000)); //s per day
+    if(todayTime > 0) intToString(stringed, (numberOfRotations*wheelCircumference*3600)/(todayTime*1000)); //s per day
+    else intToString(stringed, 0); //s per day
     LcdString(stringed);
-    LcdString(" m");
+    LcdString(" km/s");
 
 
     GotoXY(0,5);
@@ -114,6 +124,7 @@ void setup(){
     lastPrintLCD = millis();
     
     InitialiseTachometer();
+    initializeValues();
         
     pinMode(13, OUTPUT);
     digitalWrite(13, LOW);
