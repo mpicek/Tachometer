@@ -93,22 +93,20 @@ void printOnLCD(){
     GotoXY(35,2);
     LcdString(" Km/h");
 
-    GotoXY(0,4);
-    intToString(stringed, (numberOfRotations*wheelCircumference)/1000); //s per day
+    GotoXY(0,3);
+    metersToKilometers(stringed, (numberOfRotations*wheelCircumference)/1000); //s per day
     LcdString(stringed);
-    LcdString(" m");
+    LcdString(" km");
 
-    GotoXY(41, 4);
+    GotoXY(0, 4);
     if(todayTime > 0) intToString(stringed, (numberOfRotations*wheelCircumference*3600)/(todayTime*1000)); //s per day
     else intToString(stringed, 0); //s per day
     LcdString(stringed);
-    LcdString(" km/s");
-
+    LcdString(" km/h");
 
     GotoXY(0,5);
-    intToString(stringed, todayTime/1000); //t per day
+    secondsToTime(stringed, todayTime/1000);
     LcdString(stringed);
-    LcdString(" s");
 }
 
 volatile bool b = 0;
