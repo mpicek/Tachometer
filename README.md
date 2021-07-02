@@ -1,6 +1,6 @@
 # Tachometer
 
-This is a project used as seminar and later as a school-leaving thesis. The goal was to build a fully-fuctioning speedometer for bikes.
+This is my old grammar school project. The goal was to build a fully-fuctioning speedometer for bikes.
 
 Hardware used
 - Arduino Nano
